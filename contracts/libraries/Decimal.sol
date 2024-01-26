@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
-
-import "./SafeMathCopy.sol";
+ 
+import '@openzeppelin/contracts/math/SafeMath.sol';
 
 /**
  * @title Decimal
@@ -11,7 +11,7 @@ import "./SafeMathCopy.sol";
  * Library that defines a fixed-point number with 18 decimal places.
  */
 library Decimal {
-    using SafeMathCopy for uint256;
+    using SafeMath for uint256;
 
     // ============ Constants ============
 

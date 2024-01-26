@@ -17,9 +17,12 @@ const config: HardhatUserConfig = {
         url: BSC_RPC,
         enabled: true,
       },
-      accounts: {
-        accountsBalance: '1000000000000000000000000', // 1 mil ether
-      },
+      accounts: [
+        {
+          privateKey: deployer.private,
+          balance: '1000000000000000000000000', // 1 mil ether
+        },
+      ]
     },
     bscTestnet: {
       url: BSC_Tetsnet_RPC,

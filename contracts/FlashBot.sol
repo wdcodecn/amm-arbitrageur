@@ -8,7 +8,12 @@ import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/utils/EnumerableSet.sol';
 import 'hardhat/console.sol';
 
-import './interfaces/IUniswapV2Pair.sol';
+//import '@uniswap/v2-periphery/contracts/libraries/UniswapV2Library.sol';
+
+import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol';
+import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol';
+import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Callee.sol';
+
 import './interfaces/IWETH.sol';
 import './libraries/Decimal.sol';
 
