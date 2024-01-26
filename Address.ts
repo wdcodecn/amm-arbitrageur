@@ -1,5 +1,5 @@
 import { getAddress } from 'ethers/lib/utils';
-import { IUniswapV2Factory__factory, IUniswapV2Pair__factory } from '../typechain';
+import { IUniswapV2Factory__factory, IUniswapV2Pair__factory } from './typechain';
 
 let Address = {
   56: {
@@ -32,8 +32,9 @@ export const MdexSwapFactoryV2 = getAddress('0x3CD1C46068dAEa5Ebb0d3f55F6915B106
 export const BabySwapFactoryV2 = getAddress('0x86407bEa2078ea5f5EB5A52B2caA963bC1F889Da');
 export const UniSwapFactoryV2 = getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f');
 
-// export const SushiSwapFactoryV2 =  getAddress("0x10ED43C718714eb63d5aA57B78B54704E256024E");
+export const Multicall2 = getAddress('0x963Df249eD09c358A4819E39d9Cd5736c3087184');
 
+// export const SushiSwapFactoryV2 =  getAddress("0x10ED43C718714eb63d5aA57B78B54704E256024E");
 
 export async function getPairAddress(factory: string, tokenA: string, tokenB: string, ethers: any) {
   let iUniswapV2Factory = IUniswapV2Factory__factory.connect(factory, ethers.provider);

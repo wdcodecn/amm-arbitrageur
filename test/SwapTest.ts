@@ -4,7 +4,7 @@ import { expect } from 'chai';
 import { ethers, waffle } from 'hardhat';
 import { FlashBot, IWETH } from '../typechain';
 import { Token } from '@uniswap/sdk-core';
-import { getPairAddress, MdexSwapFactoryV2, PancakeSwapFactoryV2 } from './Address';
+import { getPairAddress, MdexSwapFactoryV2, PancakeSwapFactoryV2 } from '../Address';
 
 describe('Flashswap', () => {
   let weth: IWETH;
