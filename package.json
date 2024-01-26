@@ -7,8 +7,8 @@
     "prettier": "prettier --write 'contracts/**/*.sol'",
     "bot": "hardhat run --network bsc bot/index.ts",
     "compile": "hardhat compile",
-    "test": "hardhat test",
-    "run": "hardhat run",
+    "test": "hardhat test test/SwapTest.ts",
+    "run": "hardhat run scripts/",
     "clean": "hardhat clean"
   },
   "devDependencies": {

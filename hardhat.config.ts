@@ -9,14 +9,24 @@ const BSC_RPC = 'https://bsc-dataseed1.defibit.io/';
 const BSC_Tetsnet_RPC = 'https://data-seed-prebsc-1-s1.binance.org:8545/';
 
 const config: HardhatUserConfig = {
-  solidity: { version: '0.7.6' },
+  solidity: {
+    version: '0.7.6',
+    // version: '0.8.11',
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 888,
+      },
+    },
+  },
+  defaultNetwork: 'hardhat',
   networks: {
     hardhat: {
       // loggingEnabled: true,
       forking: {
         url: BSC_RPC,
-        enabled: true,
       },
+      chainId: 0x38,
       accounts: [
         {
           privateKey: deployer.private,
