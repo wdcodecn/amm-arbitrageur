@@ -1,6 +1,9 @@
 import { task, HardhatUserConfig } from 'hardhat/config';
 import '@typechain/hardhat';
 import '@nomiclabs/hardhat-waffle';
+import "hardhat-tracer";
+
+import "dotenv/config";
 
 import deployer from './.secret';
 
