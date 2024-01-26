@@ -5,7 +5,11 @@
   "license": "MIT",
   "scripts": {
     "prettier": "prettier --write 'contracts/**/*.sol'",
-    "bot": "hardhat run --network bsc bot/index.ts"
+    "bot": "hardhat run --network bsc bot/index.ts",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "run": "hardhat run",
+    "clean": "hardhat clean"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.0",
