@@ -13,6 +13,7 @@ import 'hardhat/console.sol';
 import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol';
 import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol';
 import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Callee.sol';
+import '@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol';
 
 import './interfaces/IWETH.sol';
 import './libraries/Decimal.sol';
@@ -58,9 +59,15 @@ contract FlashBot is Ownable {
     // AVAILABLE BASE TOKENS
     EnumerableSet.AddressSet baseTokens;
 
+    // AVAILABLE routerV2s
+    EnumerableSet.AddressSet routerV2s;
+
     event Withdrawn(address indexed to, uint256 indexed value);
     event BaseTokenAdded(address indexed token);
     event BaseTokenRemoved(address indexed token);
+
+    event RouterV2Added(address indexed token);
+    event RouterV2Removed(address indexed token);
 
     constructor(address _WETH) {
         WETH = _WETH;
@@ -72,7 +79,10 @@ contract FlashBot is Ownable {
     /// @dev Redirect uniswap callback function
     /// The callback function on different DEX are not same, so use a fallback to redirect to uniswapV2Call
     fallback(bytes calldata _input) external returns (bytes memory) {
-        (address sender, uint256 amount0, uint256 amount1, bytes memory data) = abi.decode(_input[4:], (address, uint256, uint256, bytes));
+        (address sender, uint256 amount0, uint256 amount1, bytes memory data) = abi.decode(
+            _input[4 :],
+            (address, uint256, uint256, bytes)
+        );
         uniswapV2Call(sender, amount0, amount1, data);
     }
 
@@ -90,6 +100,24 @@ contract FlashBot is Ownable {
                 // do not use safe transfer here to prevents revert by any shitty token
                 IERC20(token).transfer(owner(), balance);
             }
+        }
+    }
+
+    function addRouterV2(address token) external onlyOwner {
+        routerV2s.add(token);
+        emit BaseTokenAdded(token);
+    }
+
+    function removeRouterV2(address token) external onlyOwner {
+        routerV2s.remove(token);
+        emit RouterV2Removed(token);
+    }
+
+    function getRouterV2s() external view returns (address[] memory tokens) {
+        uint256 length = routerV2s.length();
+        tokens = new address[](length);
+        for (uint256 i = 0; i < length; i++) {
+            tokens[i] = routerV2s.at(i);
         }
     }
 
@@ -120,15 +148,10 @@ contract FlashBot is Ownable {
         return baseTokens.contains(token);
     }
 
-    function isbaseTokenSmaller(address pool0, address pool1)
-        internal
-        view
-        returns (
-            bool baseSmaller,
-            address baseToken,
-            address quoteToken
-        )
-    {
+    function isbaseTokenSmaller(
+        address pool0,
+        address pool1
+    ) internal view returns (bool baseSmaller, address baseToken, address quoteToken) {
         require(pool0 != pool1, 'Same pair address');
         (address pool0Token0, address pool0Token1) = (IUniswapV2Pair(pool0).token0(), IUniswapV2Pair(pool0).token1());
         (address pool1Token0, address pool1Token1) = (IUniswapV2Pair(pool1).token0(), IUniswapV2Pair(pool1).token1());
@@ -147,23 +170,14 @@ contract FlashBot is Ownable {
         address pool0,
         address pool1,
         bool baseTokenSmaller
-    )
-        internal
-        view
-        returns (
-            address lowerPool,
-            address higherPool,
-            OrderedReserves memory orderedReserves
-        )
-    {
+    ) internal view returns (address lowerPool, address higherPool, OrderedReserves memory orderedReserves) {
         (uint256 pool0Reserve0, uint256 pool0Reserve1, ) = IUniswapV2Pair(pool0).getReserves();
         (uint256 pool1Reserve0, uint256 pool1Reserve1, ) = IUniswapV2Pair(pool1).getReserves();
 
         // Calculate the price denominated in quote asset token
-        (Decimal.D256 memory price0, Decimal.D256 memory price1) =
-            baseTokenSmaller
-                ? (Decimal.from(pool0Reserve0).div(pool0Reserve1), Decimal.from(pool1Reserve0).div(pool1Reserve1))
-                : (Decimal.from(pool0Reserve1).div(pool0Reserve0), Decimal.from(pool1Reserve1).div(pool1Reserve0));
+        (Decimal.D256 memory price0, Decimal.D256 memory price1) = baseTokenSmaller
+            ? (Decimal.from(pool0Reserve0).div(pool0Reserve1), Decimal.from(pool1Reserve0).div(pool1Reserve1))
+            : (Decimal.from(pool0Reserve1).div(pool0Reserve0), Decimal.from(pool1Reserve1).div(pool1Reserve0));
 
         // get a1, b1, a2, b2 with following rule:
         // 1. (a1, b1) represents the pool with lower price, denominated in quote asset token
@@ -200,8 +214,9 @@ contract FlashBot is Ownable {
         // avoid stack too deep error
         {
             uint256 borrowAmount = calcBorrowAmount(orderedReserves);
-            (uint256 amount0Out, uint256 amount1Out) =
-                info.baseTokenSmaller ? (uint256(0), borrowAmount) : (borrowAmount, uint256(0));
+            (uint256 amount0Out, uint256 amount1Out) = info.baseTokenSmaller
+                ? (uint256(0), borrowAmount)
+                : (borrowAmount, uint256(0));
             // borrow quote token on lower price pool, calculate how much debt we need to pay demoninated in base token
             uint256 debtAmount = getAmountIn(borrowAmount, orderedReserves.a1, orderedReserves.b1);
             // sell borrowed quote token on higher price pool, calculate how much base token we can get
@@ -232,12 +247,203 @@ contract FlashBot is Ownable {
         permissionedPairAddress = address(1);
     }
 
-    function uniswapV2Call(
-        address sender,
-        uint256 amount0,
-        uint256 amount1,
-        bytes memory data
-    ) public {
+
+    struct PoolInfo {
+        address token;
+        RouterInfo[] routerInfos;
+    }
+
+    struct RouterInfo {
+        address router;
+        RouterPoolInfo[] routerPoolInfos;
+    }
+
+    struct RouterPoolInfo {
+        address[] path;
+        uint256[] amountsOut;
+    }
+
+//    function checkPool(address[] calldata tokens, address[] calldata routers, address wbnb, address busd, address usdt) external view returns (PoolInfo[] memory) {
+//        PoolInfo[] memory poolInfos = new PoolInfo[](tokens.length);
+//
+//        for (uint256 i = 0; i < tokens.length; i++) {
+//            address token = tokens[i];
+//
+//            RouterInfo[]  memory routerInfos = new RouterInfo[](routers.length);
+//
+//            for (uint256 j = 0; j < routers.length; j++) {
+//
+//                RouterPoolInfo[]  memory routerPoolInfos = new RouterPoolInfo[](routers.length);
+//
+//                address router = routers[j];
+//                IUniswapV2Router02 router02 = IUniswapV2Router02(router);
+//
+//
+//                address[] memory path = new address[](2);
+//                path[0] = wbnb;
+//                path[1] = token;
+//
+//                try router02.getAmountsOut(1 ether, path) returns (uint256[] memory amountsOut) {
+//
+//                    RouterPoolInfo memory routerPoolInfo = RouterPoolInfo({
+//                        path: path,
+//                        amountsOut: amountsOut
+//                    });
+//
+//                    routerPoolInfos[0] = routerPoolInfo;
+//
+//                } catch {
+//
+//                }
+////
+////
+////                {
+////                    address[] memory path = new address[](2);
+////                    path[0] = wbnb;
+////                    path[1] = usdt;
+////                    path[2] = token;
+////
+////                    try router02.getAmountsOut(1 ether, path) returns (uint256[] memory amountsOut) {
+////
+////                        RouterPoolInfo memory routerPoolInfo = RouterPoolInfo({
+////                            path: path,
+////                            amountsOut: amountsOut
+////                        });
+////
+////                        routerPoolInfos[routerPoolInfos.length + 1] = routerPoolInfo;
+////                    } catch {
+////
+////                    }
+////                }
+//
+//                RouterInfo memory routerInfo = RouterInfo({
+//                    router: router,
+//                    routerPoolInfos: routerPoolInfos
+//                });
+//                routerInfos[j] = routerInfo;
+//
+//            }
+//
+//
+//            PoolInfo memory poolInfo = PoolInfo({
+//                token: token,
+//                routerInfos: routerInfos
+//            });
+//
+//            poolInfos[i] = poolInfo;
+//        }
+//
+//        return poolInfos;
+//    }
+
+
+
+    struct Buy {
+        address router;
+        address[] path;
+        uint256 buyAmount;
+    }
+
+    struct Sell {
+        address router;
+        address[] path;
+    }
+
+    function simpleArbitrageV2(Buy calldata buy, Sell calldata sell) external {
+
+        IERC20(buy.path[0]).transferFrom(msg.sender, address(this), buy.buyAmount);
+        uint256 balance_before = IERC20(buy.path[0]).balanceOf(address(this));
+        console.log('balance_before', balance_before);
+
+        // 授权买入路由 购买代币
+        IERC20(buy.path[0]).approve(buy.router, buy.buyAmount);
+        // 购买
+        IUniswapV2Router02 buy_router = IUniswapV2Router02(buy.router);
+        buy_router.swapExactTokensForTokens(buy.buyAmount, 0, buy.path, address(this), block.timestamp + 100);
+        // 获取购买到的数量
+        uint256 token_balance = IERC20(sell.path[0]).balanceOf(address(this));
+        console.log('token_balance', token_balance);
+        // 授权卖出路由 卖出代币
+        IERC20(sell.path[0]).approve(sell.router, token_balance);
+        // 卖出
+        IUniswapV2Router02 sell_router = IUniswapV2Router02(sell.router);
+        sell_router.swapExactTokensForTokens(token_balance, 0, sell.path, address(this), block.timestamp + 100);
+
+        uint256 balance_after = IERC20(buy.path[0]).balanceOf(address(this));
+
+        console.log('balance_before', balance_after);
+
+        require(balance_after > balance_before, 'Losing money');
+
+        // 转回代币
+        IERC20(buy.path[0]).transfer(msg.sender, balance_after);
+
+    }
+
+    function simpleArbitrageV1(address router, address wbnb, address busd, address token, uint256 number) external {
+
+        IERC20(wbnb).transferFrom(msg.sender, address(this), number);
+        uint256 balance_before = IERC20(wbnb).balanceOf(address(this));
+        console.log('balance_before', balance_before);
+
+
+        IUniswapV2Router02 router02 = IUniswapV2Router02(router);
+
+        IERC20(wbnb).approve(router, number);
+
+        address[] memory path = new address[](3);
+        path[0] = wbnb;
+        path[1] = busd;
+        path[2] = token;
+
+        address[] memory path1 = new address[](2);
+        path1[0] = token;
+        path1[1] = wbnb;
+
+        uint256[] memory getAmountsOut1 = router02.getAmountsOut(number, path);
+
+        console.log('getAmountsOut1', getAmountsOut1[getAmountsOut1.length - 1]);
+        uint256[] memory getAmountsOut2 = router02.getAmountsOut(getAmountsOut1[getAmountsOut1.length - 1], path1);
+
+        console.log('getAmountsOut2', getAmountsOut2[getAmountsOut2.length - 1]);
+
+        {
+            address[] memory path = new address[](3);
+            path[0] = token;
+            path[1] = busd;
+            path[2] = wbnb;
+
+            address[] memory path1 = new address[](2);
+            path1[0] = wbnb;
+            path1[1] = token;
+
+            uint256[] memory getAmountsOut1 = router02.getAmountsOut(number, path1);
+
+            console.log('getAmountsOut1', getAmountsOut1[getAmountsOut1.length - 1]);
+            uint256[] memory getAmountsOut2 = router02.getAmountsOut(getAmountsOut1[getAmountsOut1.length - 1], path);
+
+            console.log('getAmountsOut2', getAmountsOut2[getAmountsOut2.length - 1]);
+
+        }
+
+        require(getAmountsOut2[getAmountsOut2.length - 1] > number, 'Losing money');
+
+        router02.swapExactTokensForTokens(number, 0, path, address(this), block.timestamp + 100);
+
+        uint256 token_balance = IERC20(token).balanceOf(address(this));
+
+        console.log('token_balance', token_balance);
+        IERC20(token).approve(router, token_balance);
+
+        router02.swapExactTokensForTokens(token_balance, 0, path1, address(this), block.timestamp + 100);
+
+        uint256 balance_after = IERC20(wbnb).balanceOf(address(this));
+
+        console.log('balance_before', balance_after);
+        require(balance_after > balance_before, 'Losing money');
+    }
+
+    function uniswapV2Call(address sender, uint256 amount0, uint256 amount1, bytes memory data) public {
         // access control
         require(msg.sender == permissionedPairAddress, 'Non permissioned address call');
         require(sender == address(this), 'Not from this contract');
@@ -247,8 +453,9 @@ contract FlashBot is Ownable {
 
         IERC20(info.borrowedToken).safeTransfer(info.targetPool, borrowedAmount);
 
-        (uint256 amount0Out, uint256 amount1Out) =
-            info.debtTokenSmaller ? (info.debtTokenOutAmount, uint256(0)) : (uint256(0), info.debtTokenOutAmount);
+        (uint256 amount0Out, uint256 amount1Out) = info.debtTokenSmaller
+            ? (info.debtTokenOutAmount, uint256(0))
+            : (uint256(0), info.debtTokenOutAmount);
         IUniswapV2Pair(info.targetPool).swap(amount0Out, amount1Out, address(this), new bytes(0));
 
         IERC20(info.debtToken).safeTransfer(info.debtPool, info.debtAmount);
@@ -312,8 +519,12 @@ contract FlashBot is Ownable {
             d = 1e10;
         }
 
-        (int256 a1, int256 a2, int256 b1, int256 b2) =
-            (int256(reserves.a1 / d), int256(reserves.a2 / d), int256(reserves.b1 / d), int256(reserves.b2 / d));
+        (int256 a1, int256 a2, int256 b1, int256 b2) = (
+            int256(reserves.a1 / d),
+            int256(reserves.a2 / d),
+            int256(reserves.b1 / d),
+            int256(reserves.b2 / d)
+        );
 
         int256 a = a1 * b1 - a2 * b2;
         int256 b = 2 * b1 * b2 * (a1 + a2);
@@ -327,12 +538,8 @@ contract FlashBot is Ownable {
     }
 
     /// @dev find solution of quadratic equation: ax^2 + bx + c = 0, only return the positive solution
-    function calcSolutionForQuadratic(
-        int256 a,
-        int256 b,
-        int256 c
-    ) internal pure returns (int256 x1, int256 x2) {
-        int256 m = b**2 - 4 * a * c;
+    function calcSolutionForQuadratic(int256 a, int256 b, int256 c) internal pure returns (int256 x1, int256 x2) {
+        int256 m = b ** 2 - 4 * a * c;
         // m < 0 leads to complex number
         require(m > 0, 'Complex number');
 
@@ -347,7 +554,7 @@ contract FlashBot is Ownable {
 
         // The scale factor is a crude way to turn everything into integer calcs.
         // Actually do (n * 10 ^ 4) ^ (1/2)
-        uint256 _n = n * 10**6;
+        uint256 _n = n * 10 ** 6;
         uint256 c = _n;
         res = _n;
 
@@ -360,7 +567,7 @@ contract FlashBot is Ownable {
             }
             res = xi;
         }
-        res = res / 10**3;
+        res = res / 10 ** 3;
     }
 
     // copy from UniswapV2Library

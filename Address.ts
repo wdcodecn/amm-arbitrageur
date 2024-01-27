@@ -1,5 +1,10 @@
 import { getAddress } from 'ethers/lib/utils';
-import { IUniswapV2Factory__factory, IUniswapV2Pair__factory } from './typechain';
+import {
+  IUniswapV2Factory__factory,
+  IUniswapV2Pair__factory,
+  IUniswapV2Router02,
+  IUniswapV2Router02__factory
+} from './typechain';
 
 let Address = {
   56: {
@@ -10,6 +15,26 @@ let Address = {
 
 };
 
+
+export enum EvmChain{
+  BSC = 56,
+  HECO = 128,
+  MATIC = 137,
+  FTM = 250,
+  AVAX = 43114,
+  OKEX = 66,
+  ETH = 1
+}
+
+
+export  const EvmSwapInfo = {
+  [EvmChain.BSC]: {
+    'WBNB': '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+    'USDT': '0x55d398326f99059fF775485246999027B3197955',
+    'USDC': '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d'
+  },
+
+}
 
 export default Address;
 
@@ -44,5 +69,10 @@ export async function getPairAddress(factory: string, tokenA: string, tokenB: st
 
 export function getPairContract(pair: string, ethers: any) {
   return IUniswapV2Pair__factory.connect(pair, ethers.provider);
+}
+
+
+export function getRouterContract(router: string, ethers: any) {
+  return IUniswapV2Router02__factory.connect(router, ethers.provider);
 }
 

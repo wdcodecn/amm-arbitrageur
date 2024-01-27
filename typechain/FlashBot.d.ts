@@ -22,13 +22,18 @@ import { TypedEventFilter, TypedEvent, TypedListener } from "./commons";
 interface FlashBotInterface extends ethers.utils.Interface {
   functions: {
     "addBaseToken(address)": FunctionFragment;
+    "addRouterV2(address)": FunctionFragment;
     "baseTokensContains(address)": FunctionFragment;
     "flashArbitrage(address,address)": FunctionFragment;
     "getBaseTokens()": FunctionFragment;
     "getProfit(address,address)": FunctionFragment;
+    "getRouterV2s()": FunctionFragment;
     "owner()": FunctionFragment;
     "removeBaseToken(address)": FunctionFragment;
+    "removeRouterV2(address)": FunctionFragment;
     "renounceOwnership()": FunctionFragment;
+    "simpleArbitrageV1(address,address,address,address,uint256)": FunctionFragment;
+    "simpleArbitrageV2(tuple,tuple)": FunctionFragment;
     "transferOwnership(address)": FunctionFragment;
     "uniswapV2Call(address,uint256,uint256,bytes)": FunctionFragment;
     "withdraw()": FunctionFragment;
@@ -38,6 +43,7 @@ interface FlashBotInterface extends ethers.utils.Interface {
     functionFragment: "addBaseToken",
     values: [string]
   ): string;
+  encodeFunctionData(functionFragment: "addRouterV2", values: [string]): string;
   encodeFunctionData(
     functionFragment: "baseTokensContains",
     values: [string]
@@ -54,14 +60,33 @@ interface FlashBotInterface extends ethers.utils.Interface {
     functionFragment: "getProfit",
     values: [string, string]
   ): string;
+  encodeFunctionData(
+    functionFragment: "getRouterV2s",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "removeBaseToken",
     values: [string]
   ): string;
   encodeFunctionData(
+    functionFragment: "removeRouterV2",
+    values: [string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "renounceOwnership",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "simpleArbitrageV1",
+    values: [string, string, string, string, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "simpleArbitrageV2",
+    values: [
+      { router: string; path: string[]; buyAmount: BigNumberish },
+      { router: string; path: string[] }
+    ]
   ): string;
   encodeFunctionData(
     functionFragment: "transferOwnership",
@@ -78,6 +103,10 @@ interface FlashBotInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "addRouterV2",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "baseTokensContains",
     data: BytesLike
   ): Result;
@@ -90,13 +119,29 @@ interface FlashBotInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getProfit", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getRouterV2s",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "removeBaseToken",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "removeRouterV2",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "renounceOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "simpleArbitrageV1",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "simpleArbitrageV2",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -113,12 +158,16 @@ interface FlashBotInterface extends ethers.utils.Interface {
     "BaseTokenAdded(address)": EventFragment;
     "BaseTokenRemoved(address)": EventFragment;
     "OwnershipTransferred(address,address)": EventFragment;
+    "RouterV2Added(address)": EventFragment;
+    "RouterV2Removed(address)": EventFragment;
     "Withdrawn(address,uint256)": EventFragment;
   };
 
   getEvent(nameOrSignatureOrTopic: "BaseTokenAdded"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "BaseTokenRemoved"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "OwnershipTransferred"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "RouterV2Added"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "RouterV2Removed"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Withdrawn"): EventFragment;
 }
 
@@ -176,6 +225,16 @@ export class FlashBot extends Contract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<ContractTransaction>;
 
+    addRouterV2(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
+    "addRouterV2(address)"(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
     baseTokensContains(
       token: string,
       overrides?: CallOverrides
@@ -218,6 +277,14 @@ export class FlashBot extends Contract {
       overrides?: CallOverrides
     ): Promise<[BigNumber, string] & { profit: BigNumber; baseToken: string }>;
 
+    getRouterV2s(
+      overrides?: CallOverrides
+    ): Promise<[string[]] & { tokens: string[] }>;
+
+    "getRouterV2s()"(
+      overrides?: CallOverrides
+    ): Promise<[string[]] & { tokens: string[] }>;
+
     owner(overrides?: CallOverrides): Promise<[string]>;
 
     "owner()"(overrides?: CallOverrides): Promise<[string]>;
@@ -232,11 +299,51 @@ export class FlashBot extends Contract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<ContractTransaction>;
 
+    removeRouterV2(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
+    "removeRouterV2(address)"(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
     renounceOwnership(
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<ContractTransaction>;
 
     "renounceOwnership()"(
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
+    simpleArbitrageV1(
+      router: string,
+      wbnb: string,
+      busd: string,
+      token: string,
+      number: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
+    "simpleArbitrageV1(address,address,address,address,uint256)"(
+      router: string,
+      wbnb: string,
+      busd: string,
+      token: string,
+      number: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
+    simpleArbitrageV2(
+      buy: { router: string; path: string[]; buyAmount: BigNumberish },
+      sell: { router: string; path: string[] },
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
+    "simpleArbitrageV2((address,address[],uint256),(address,address[]))"(
+      buy: { router: string; path: string[]; buyAmount: BigNumberish },
+      sell: { router: string; path: string[] },
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<ContractTransaction>;
 
@@ -285,6 +392,16 @@ export class FlashBot extends Contract {
     overrides?: Overrides & { from?: string | Promise<string> }
   ): Promise<ContractTransaction>;
 
+  addRouterV2(
+    token: string,
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
+  "addRouterV2(address)"(
+    token: string,
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
   baseTokensContains(
     token: string,
     overrides?: CallOverrides
@@ -323,6 +440,10 @@ export class FlashBot extends Contract {
     overrides?: CallOverrides
   ): Promise<[BigNumber, string] & { profit: BigNumber; baseToken: string }>;
 
+  getRouterV2s(overrides?: CallOverrides): Promise<string[]>;
+
+  "getRouterV2s()"(overrides?: CallOverrides): Promise<string[]>;
+
   owner(overrides?: CallOverrides): Promise<string>;
 
   "owner()"(overrides?: CallOverrides): Promise<string>;
@@ -337,11 +458,51 @@ export class FlashBot extends Contract {
     overrides?: Overrides & { from?: string | Promise<string> }
   ): Promise<ContractTransaction>;
 
+  removeRouterV2(
+    token: string,
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
+  "removeRouterV2(address)"(
+    token: string,
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
   renounceOwnership(
     overrides?: Overrides & { from?: string | Promise<string> }
   ): Promise<ContractTransaction>;
 
   "renounceOwnership()"(
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
+  simpleArbitrageV1(
+    router: string,
+    wbnb: string,
+    busd: string,
+    token: string,
+    number: BigNumberish,
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
+  "simpleArbitrageV1(address,address,address,address,uint256)"(
+    router: string,
+    wbnb: string,
+    busd: string,
+    token: string,
+    number: BigNumberish,
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
+  simpleArbitrageV2(
+    buy: { router: string; path: string[]; buyAmount: BigNumberish },
+    sell: { router: string; path: string[] },
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
+  "simpleArbitrageV2((address,address[],uint256),(address,address[]))"(
+    buy: { router: string; path: string[]; buyAmount: BigNumberish },
+    sell: { router: string; path: string[] },
     overrides?: Overrides & { from?: string | Promise<string> }
   ): Promise<ContractTransaction>;
 
@@ -387,6 +548,13 @@ export class FlashBot extends Contract {
       overrides?: CallOverrides
     ): Promise<void>;
 
+    addRouterV2(token: string, overrides?: CallOverrides): Promise<void>;
+
+    "addRouterV2(address)"(
+      token: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     baseTokensContains(
       token: string,
       overrides?: CallOverrides
@@ -425,6 +593,10 @@ export class FlashBot extends Contract {
       overrides?: CallOverrides
     ): Promise<[BigNumber, string] & { profit: BigNumber; baseToken: string }>;
 
+    getRouterV2s(overrides?: CallOverrides): Promise<string[]>;
+
+    "getRouterV2s()"(overrides?: CallOverrides): Promise<string[]>;
+
     owner(overrides?: CallOverrides): Promise<string>;
 
     "owner()"(overrides?: CallOverrides): Promise<string>;
@@ -436,9 +608,46 @@ export class FlashBot extends Contract {
       overrides?: CallOverrides
     ): Promise<void>;
 
+    removeRouterV2(token: string, overrides?: CallOverrides): Promise<void>;
+
+    "removeRouterV2(address)"(
+      token: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     renounceOwnership(overrides?: CallOverrides): Promise<void>;
 
     "renounceOwnership()"(overrides?: CallOverrides): Promise<void>;
+
+    simpleArbitrageV1(
+      router: string,
+      wbnb: string,
+      busd: string,
+      token: string,
+      number: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    "simpleArbitrageV1(address,address,address,address,uint256)"(
+      router: string,
+      wbnb: string,
+      busd: string,
+      token: string,
+      number: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    simpleArbitrageV2(
+      buy: { router: string; path: string[]; buyAmount: BigNumberish },
+      sell: { router: string; path: string[] },
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    "simpleArbitrageV2((address,address[],uint256),(address,address[]))"(
+      buy: { router: string; path: string[]; buyAmount: BigNumberish },
+      sell: { router: string; path: string[] },
+      overrides?: CallOverrides
+    ): Promise<void>;
 
     transferOwnership(
       newOwner: string,
@@ -488,6 +697,14 @@ export class FlashBot extends Contract {
       { previousOwner: string; newOwner: string }
     >;
 
+    RouterV2Added(
+      token: string | null
+    ): TypedEventFilter<[string], { token: string }>;
+
+    RouterV2Removed(
+      token: string | null
+    ): TypedEventFilter<[string], { token: string }>;
+
     Withdrawn(
       to: string | null,
       value: BigNumberish | null
@@ -501,6 +718,16 @@ export class FlashBot extends Contract {
     ): Promise<BigNumber>;
 
     "addBaseToken(address)"(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
+    addRouterV2(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
+    "addRouterV2(address)"(
       token: string,
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<BigNumber>;
@@ -543,6 +770,10 @@ export class FlashBot extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    getRouterV2s(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "getRouterV2s()"(overrides?: CallOverrides): Promise<BigNumber>;
+
     owner(overrides?: CallOverrides): Promise<BigNumber>;
 
     "owner()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -557,11 +788,51 @@ export class FlashBot extends Contract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<BigNumber>;
 
+    removeRouterV2(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
+    "removeRouterV2(address)"(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
     renounceOwnership(
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<BigNumber>;
 
     "renounceOwnership()"(
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
+    simpleArbitrageV1(
+      router: string,
+      wbnb: string,
+      busd: string,
+      token: string,
+      number: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
+    "simpleArbitrageV1(address,address,address,address,uint256)"(
+      router: string,
+      wbnb: string,
+      busd: string,
+      token: string,
+      number: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
+    simpleArbitrageV2(
+      buy: { router: string; path: string[]; buyAmount: BigNumberish },
+      sell: { router: string; path: string[] },
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
+    "simpleArbitrageV2((address,address[],uint256),(address,address[]))"(
+      buy: { router: string; path: string[]; buyAmount: BigNumberish },
+      sell: { router: string; path: string[] },
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<BigNumber>;
 
@@ -611,6 +882,16 @@ export class FlashBot extends Contract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<PopulatedTransaction>;
 
+    addRouterV2(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
+    "addRouterV2(address)"(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
     baseTokensContains(
       token: string,
       overrides?: CallOverrides
@@ -649,6 +930,10 @@ export class FlashBot extends Contract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
+    getRouterV2s(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    "getRouterV2s()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
     owner(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     "owner()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
@@ -663,11 +948,51 @@ export class FlashBot extends Contract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<PopulatedTransaction>;
 
+    removeRouterV2(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
+    "removeRouterV2(address)"(
+      token: string,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
     renounceOwnership(
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<PopulatedTransaction>;
 
     "renounceOwnership()"(
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
+    simpleArbitrageV1(
+      router: string,
+      wbnb: string,
+      busd: string,
+      token: string,
+      number: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
+    "simpleArbitrageV1(address,address,address,address,uint256)"(
+      router: string,
+      wbnb: string,
+      busd: string,
+      token: string,
+      number: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
+    simpleArbitrageV2(
+      buy: { router: string; path: string[]; buyAmount: BigNumberish },
+      sell: { router: string; path: string[] },
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
+    "simpleArbitrageV2((address,address[],uint256),(address,address[]))"(
+      buy: { router: string; path: string[]; buyAmount: BigNumberish },
+      sell: { router: string; path: string[] },
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<PopulatedTransaction>;
 

@@ -8,6 +8,7 @@
     "bot": "hardhat run --network bsc bot/index.ts",
     "compile": "hardhat compile",
     "test": "hardhat test test/SwapTest.ts --vvvv",
+    "test1": "hardhat test test/scan.test.ts",
     "run": "hardhat run scripts/",
     "clean": "hardhat clean"
   },
